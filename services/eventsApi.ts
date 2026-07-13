@@ -1,86 +1,70 @@
-import { Event } from '../types';
-
-// ---------------------------------------------------------------------------
-// MOCK DATA LAYER — reads/writes localStorage under the key below.
-// Every exported function here maps 1:1 to a real endpoint from the spec.
-// When the backend is ready, replace the body of each function with a
-// `fetch(...)` call to the matching endpoint (noted in each comment) and
-// leave every call site in the app untouched.
-// ---------------------------------------------------------------------------
-
-const STORAGE_KEY = 'laas_cms_events';
-
-function readAll(): Event[] {
-  if (typeof window === 'undefined') return [];
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return seedIfEmpty();
-  try {
-    return JSON.parse(raw) as Event[];
-  } catch {
-    return [];
-  }
-}
-
-function writeAll(events: Event[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
-  // Lets other tabs/pages (e.g. the public "Live Now" page) react immediately
-  window.dispatchEvent(new Event('storage'));
-}
-
-function seedIfEmpty(): Event[] {
-  const seed: Event[] = [
-    {
-      id: 'evt_001',
-      title: 'Week 4: The Breaking Point',
-      description: 'Audience decides the next challenge.',
-      status: 'upcoming',
-      start_time: new Date(Date.now() + 3600_000).toISOString(),
-      end_time: null,
-      stream_url: 'https://www.youtube.com/embed/dQw4w9WgXcQ',
-      season_id: 'season_01',
-      mission_id: null,
-      thumbnail: '',
-    },
-  ];
-  writeAll(seed);
-  return seed;
-}
-
-function generateId(): string {
-  return 'evt_' + Math.random().toString(36).slice(2, 9);
-}
+import { supabase } from '../lib/supabase';
+import { Event } from './types';
 
 // GET /events/live
 export async function getLiveEvent(): Promise<Event | null> {
-  return readAll().find((e) => e.status === 'live') ?? null;
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('status', 'live')
+    .single();
+    
+  if (error) return null;
+  return data;
 }
 
 // GET /events/upcoming
 export async function getUpcomingEvents(): Promise<Event[]> {
-  return readAll().filter((e) => e.status === 'upcoming');
+  const { data } = await supabase
+    .from('events')
+    .select('*')
+    .eq('status', 'upcoming');
+    
+  return data || [];
 }
 
 // GET /events/replay
 export async function getReplayEvents(): Promise<Event[]> {
-  return readAll().filter((e) => e.status === 'ended');
+  const { data } = await supabase
+    .from('events')
+    .select('*')
+    .eq('status', 'ended');
+    
+  return data || [];
 }
 
-// GET /events (all — for the admin list view; not in spec but needed for CMS)
+// GET /events (all)
 export async function getAllEvents(): Promise<Event[]> {
-  return readAll();
+  const { data } = await supabase
+    .from('events')
+    .select('*')
+    .order('start_time', { ascending: false });
+    
+  return data || [];
 }
 
 // GET /events/{id}
 export async function getEvent(id: string): Promise<Event | null> {
-  return readAll().find((e) => e.id === id) ?? null;
+  const { data, error } = await supabase
+    .from('events')
+    .select('*')
+    .eq('id', id)
+    .single();
+    
+  if (error) return null;
+  return data;
 }
 
-// POST /events (Admin only)
-export async function createEvent(input: Omit<Event, 'id'>): Promise<Event> {
-  const events = readAll();
-  const newEvent: Event = { ...input, id: generateId() };
-  writeAll([...events, newEvent]);
-  return newEvent;
+// POST /events
+export async function createEvent(input: Omit<Event, 'id'>): Promise<Event | null> {
+  const { data, error } = await supabase
+    .from('events')
+    .insert([input])
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
 }
 
 // PATCH /events/{id}
@@ -88,23 +72,32 @@ export async function updateEvent(
   id: string,
   patch: Partial<Omit<Event, 'id'>>
 ): Promise<Event | null> {
-  const events = readAll();
-  const idx = events.findIndex((e) => e.id === id);
-  if (idx === -1) return null;
-
-  // Enforce: only one event can be "live" at a time
+  
+  // Logic: Ensure only one event is 'live' at a time
   if (patch.status === 'live') {
-    events.forEach((e, i) => {
-      if (i !== idx && e.status === 'live') e.status = 'ended';
-    });
+    await supabase
+      .from('events')
+      .update({ status: 'ended' })
+      .neq('id', id);
   }
 
-  events[idx] = { ...events[idx], ...patch };
-  writeAll(events);
-  return events[idx];
+  const { data, error } = await supabase
+    .from('events')
+    .update(patch)
+    .eq('id', id)
+    .select()
+    .single();
+    
+  if (error) throw error;
+  return data;
 }
 
 // DELETE /events/{id}
 export async function deleteEvent(id: string): Promise<void> {
-  writeAll(readAll().filter((e) => e.id !== id));
+  const { error } = await supabase
+    .from('events')
+    .delete()
+    .eq('id', id);
+    
+  if (error) throw error;
 }
