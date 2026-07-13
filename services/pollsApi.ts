@@ -1,4 +1,39 @@
-import { Poll, PollOption, PollResults, Vote } from '../types';
+interface PollOption {
+  id: string;
+  text: string;
+}
+
+interface Poll {
+  id: string;
+  event_id: string;
+  question: string;
+  options: PollOption[];
+  type: string;
+  start_time: string;
+  end_time: string;
+  show_results: boolean;
+}
+
+interface Vote {
+  id: string;
+  poll_id: string;
+  user_id: string;
+  option_id: string;
+  weight: number;
+  timestamp: string;
+}
+
+interface PollResults {
+  poll_id: string;
+  total_votes: number;
+  options: Array<{
+    option_id: string;
+    text: string;
+    vote_count: number;
+    weighted_count: number;
+    percentage: number;
+  }>;
+}
 
 const POLLS_KEY = 'laas_cms_polls';
 const VOTES_KEY = 'laas_cms_votes';
