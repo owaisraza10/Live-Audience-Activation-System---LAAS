@@ -7,16 +7,11 @@ export const metadata = {
   description: 'Integrated Human Development & Behavioral Intelligence Platform',
 };
 
-export default function RootLayout({ children }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body style={{ backgroundColor: 'var(--m3-background)', color: 'var(--m3-on-surface)' }}>
-        <Navbar />
-        {/* The 'children' prop represents whatever page the user is currently on */}
-        <main className="min-h-screen">
-          {children}
-        </main>
-        <Footer />
+        {children}
       </body>
     </html>
   );
