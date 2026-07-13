@@ -64,7 +64,7 @@ export default function RewardsPage() {
         ]);
         
         setPoints(dbProfile?.points || 0);
-        setEarnedBadgeIds(dbBadges.map(b => b.id));
+        setEarnedBadgeIds((dbBadges as any[]).map(b => b.id));
         setMonthlyRewards(dbMonthly || []);
       } catch (err) {
         console.error("Failed to load rewards", err);
