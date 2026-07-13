@@ -1,26 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+  /* Material 3 Base Colors */
+  --m3-primary: #6750A4;
+  --m3-on-primary: #FFFFFF;
+  --m3-surface: #FEF7FF;
+  --m3-on-surface: #1D1B20;
+  --m3-surface-variant: #E7E0EC;
+  --m3-background: #FFFBFE;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Material 3 Shapes */
+  --m3-radius-large: 28px;
+  --m3-radius-medium: 16px;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--m3-background);
+  color: var(--m3-on-surface);
+}
+
+/* Add custom utility for the cards if needed */
+@layer components {
+  .m3-card {
+    background-color: var(--m3-surface);
+    border-radius: var(--m3-radius-large);
+    padding: 24px;
+    box-shadow: 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  }
 }
