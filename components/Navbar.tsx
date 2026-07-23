@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 
 export default function Navbar() {
   // --- AUTH STATE ---
-  // Using TypeScript interface for the user state
   const [user, setUser] = useState<{ email: string; tier: string } | null>(null);
   const pathname = usePathname();
   const router = useRouter();
@@ -27,6 +26,7 @@ export default function Navbar() {
   };
 
   const navLinks = [
+    { name: 'Home', path: '/' },
     { name: 'Live Events', path: '/live-events' },
     { name: 'Behind the Scenes', path: '/behind-the-scenes' },
     { name: 'Rewards', path: '/rewards' },
@@ -65,7 +65,7 @@ export default function Navbar() {
               </span>
             </div>
             
-            {/* UPDATED: Avatar is now a clickable link to /profile */}
+            {/* Avatar links to profile */}
             <Link href="/profile">
               <div className="h-10 w-10 flex items-center justify-center font-bold text-lg hover:opacity-80 transition-opacity cursor-pointer"
                    style={{ 
