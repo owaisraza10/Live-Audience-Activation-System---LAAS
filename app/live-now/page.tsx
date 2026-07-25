@@ -9,15 +9,6 @@ import { getPollsForEvent, submitVote, getPollResults } from '../../lib/api/poll
 import { supabase } from '../../lib/supabase'; 
 import { recordEventAttendance } from '../../lib/api/rewards';
 
-// ⚙️ CONFIGURATION: How many DIFFERENT polls a user can vote on per event
-function getVoteLimit(tier?: string): number {
-  if (!tier) return 1;
-  const t = String(tier).toLowerCase().trim();
-  if (t === 'premium') return 5;
-  if (t === 'standard') return 3;
-  return 1; // Free users can only vote on 1 poll per event
-}
-
 export default function LiveNowPage() {
   const router = useRouter();
   
@@ -28,6 +19,13 @@ export default function LiveNowPage() {
   const [liveEvent, setLiveEvent] = useState<Event | null>(null);
   const [polls, setPolls] = useState<Poll[]>([]);
   const [pollResults, setPollResults] = useState<Record<string, PollResults>>({});
+  
+  // ⚙️ DYNAMIC CONFIGURATION: Fetched from Admin Panel (app_settings table)
+  const [tierLimits, setTierLimits] = useState<Record<string, number>>({
+    free: 1,
+    standard: 3,
+    premium: 5
+  });
   
   // TRACK WHICH POLLS THE USER HAS VOTED ON
   const [myVotes, setMyVotes] = useState<Record<string, boolean>>({}); 
@@ -55,6 +53,18 @@ export default function LiveNowPage() {
   // 2. Fetch Data Core
   async function refreshData(currentUser = user) {
     if (!currentUser) return;
+
+    // 🔥 FETCH DYNAMIC LIMITS FROM ADMIN PANEL
+    const { data: settingsData } = await supabase.from('app_settings').select('*');
+    if (settingsData && settingsData.length > 0) {
+      const newLimits = { free: 1, standard: 3, premium: 5 };
+      settingsData.forEach(setting => {
+        if (setting.key === 'free_vote_limit') newLimits.free = Number(setting.value);
+        if (setting.key === 'standard_vote_limit') newLimits.standard = Number(setting.value);
+        if (setting.key === 'premium_vote_limit') newLimits.premium = Number(setting.value);
+      });
+      setTierLimits(newLimits);
+    }
 
     const currentEvent = await getLiveEvent();
     setLiveEvent(currentEvent);
@@ -101,6 +111,8 @@ export default function LiveNowPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, () => refreshData(user))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'polls' }, () => refreshData(user))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'votes' }, () => refreshData(user))
+      // 🔥 LISTEN FOR ADMIN PANEL LIMIT CHANGES
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => refreshData(user))
       .subscribe();
 
     return () => {
@@ -114,8 +126,10 @@ export default function LiveNowPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Calculate global limits for the event
-  const userVoteLimit = getVoteLimit(user?.tier);
+  // 🔥 CALCULATE GLOBAL LIMITS FOR THE EVENT BASED ON ADMIN DB
+  const userTierKey = String(user?.tier || 'free').toLowerCase().trim();
+  const userVoteLimit = tierLimits[userTierKey] ?? 1; // Fallback to 1 if not found
+  
   // Count how many polls in THIS event the user has voted on
   const totalVotesCastInEvent = polls.filter(p => myVotes[p.id]).length;
   const votesRemaining = Math.max(0, userVoteLimit - totalVotesCastInEvent);

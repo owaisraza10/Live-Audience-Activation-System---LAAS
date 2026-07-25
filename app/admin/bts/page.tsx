@@ -4,6 +4,14 @@ import { useState, useEffect } from 'react';
 import { type BtsVideo } from '../../../lib/types';
 import { getAllBtsVideos, uploadBtsVideo, deleteBtsVideo, updateBtsVideo } from '../../../lib/api/bts';
 
+// The categories matching the front-end Hub
+const BTS_CATEGORIES = [
+  { id: 'cameras', label: '24/7 Cameras' },
+  { id: 'production', label: 'Production Room' },
+  { id: 'clips', label: 'Exclusive Clips' },
+  { id: 'notes', label: 'Creator Notes' }
+];
+
 export default function AdminBtsPage() {
   const [videos, setVideos] = useState<BtsVideo[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -16,6 +24,7 @@ export default function AdminBtsPage() {
   const [videoUrl, setVideoUrl] = useState('');
   const [duration, setDuration] = useState('');
   const [requiredTier, setRequiredTier] = useState<'free' | 'standard' | 'premium'>('premium');
+  const [category, setCategory] = useState('clips'); // NEW: Category State
 
   async function load() {
     setVideos(await getAllBtsVideos());
@@ -35,6 +44,9 @@ export default function AdminBtsPage() {
     setVideoUrl(vid.video_url);
     setDuration(vid.duration);
     setRequiredTier(vid.required_tier);
+    // Safely grab category if it exists, otherwise default to clips
+    setCategory((vid as any).category || 'clips'); 
+    
     // Smooth scroll to the top of the form for good UX
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -46,6 +58,7 @@ export default function AdminBtsPage() {
     setVideoUrl('');
     setDuration('');
     setRequiredTier('premium');
+    setCategory('clips'); // Reset category
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -65,25 +78,24 @@ export default function AdminBtsPage() {
     }, 200);
 
     setTimeout(async () => {
+      // We cast as `any` here just in case your `BtsVideo` type in lib/types.ts 
+      // hasn't been updated with the `category?: string` property yet.
+      const payload: any = {
+        title,
+        description,
+        video_url: videoUrl,
+        duration: duration || '0:00',
+        required_tier: requiredTier,
+        category: category 
+      };
+
       if (editingId) {
         // UPDATE existing video
-        await updateBtsVideo(editingId, {
-          title,
-          description,
-          video_url: videoUrl,
-          duration: duration || '0:00',
-          required_tier: requiredTier
-        });
+        await updateBtsVideo(editingId, payload);
       } else {
         // CREATE new video
-        await uploadBtsVideo({
-          title,
-          description,
-          video_url: videoUrl,
-          thumbnail_url: '',
-          duration: duration || '0:00',
-          required_tier: requiredTier
-        });
+        payload.thumbnail_url = ''; 
+        await uploadBtsVideo(payload);
       }
       
       cancelEdit(); // Clears form and resets state
@@ -101,7 +113,7 @@ export default function AdminBtsPage() {
           <h1 className="text-3xl font-bold text-red-500 tracking-widest uppercase mb-1">
             BTS Asset Manager
           </h1>
-          <p className="opacity-70">Upload and edit tiered content for the Vault.</p>
+          <p className="opacity-70">Upload and categorize tiered content for the Vault.</p>
         </div>
 
         {/* EDITOR FORM */}
@@ -136,18 +148,33 @@ export default function AdminBtsPage() {
               </div>
             </div>
 
-            {/* TIER SELECTION */}
-            <div className="border-t border-gray-700 pt-4 mt-2">
-              <label className="block text-sm font-bold mb-2 opacity-80">Required Access Tier</label>
-              <select 
-                value={requiredTier} 
-                onChange={(e) => setRequiredTier(e.target.value as any)}
-                className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-blue-500 text-white font-bold"
-              >
-                <option value="free">Free (Everyone can watch)</option>
-                <option value="standard">Standard (Standard & Premium Members)</option>
-                <option value="premium">Premium Only (VIP Exclusive)</option>
-              </select>
+            {/* CONFIGURATION ROW: TIER AND CATEGORY */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700 pt-4 mt-2">
+              <div>
+                <label className="block text-sm font-bold mb-2 opacity-80">Content Category</label>
+                <select 
+                  value={category} 
+                  onChange={(e) => setCategory(e.target.value)}
+                  className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-primary text-white font-bold"
+                >
+                  {BTS_CATEGORIES.map(cat => (
+                    <option key={cat.id} value={cat.id}>{cat.label}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-2 opacity-80">Required Access Tier</label>
+                <select 
+                  value={requiredTier} 
+                  onChange={(e) => setRequiredTier(e.target.value as any)}
+                  className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-blue-500 text-white font-bold"
+                >
+                  <option value="free">Free (Everyone can watch)</option>
+                  <option value="standard">Standard (Standard & Premium)</option>
+                  <option value="premium">Premium Only (VIP Exclusive)</option>
+                </select>
+              </div>
             </div>
 
             {isUploading ? (
@@ -157,13 +184,13 @@ export default function AdminBtsPage() {
               </div>
             ) : (
               <div className="flex gap-3 pt-4">
-                <button type="submit" className={`flex-grow px-8 py-4 rounded-xl font-bold uppercase tracking-wider transition-colors ${
-                  editingId ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : 'bg-blue-500 hover:bg-blue-600 text-white'
+                <button type="submit" className={`flex-grow px-8 py-4 rounded-xl font-bold uppercase tracking-wider transition-colors shadow-lg ${
+                  editingId ? 'bg-yellow-500 hover:bg-yellow-600 text-black' : 'bg-primary hover:brightness-110 text-on-primary'
                 }`}>
                   {editingId ? 'Save Changes' : 'Upload to Vault'}
                 </button>
                 {editingId && (
-                  <button type="button" onClick={cancelEdit} className="px-8 py-4 rounded-xl font-bold uppercase tracking-wider border border-gray-700 text-gray-400 hover:border-gray-500 transition-colors">
+                  <button type="button" onClick={cancelEdit} className="px-8 py-4 rounded-xl font-bold uppercase tracking-wider border border-gray-700 text-gray-400 hover:border-gray-500 hover:bg-gray-800 transition-colors">
                     Cancel
                   </button>
                 )}
@@ -176,35 +203,46 @@ export default function AdminBtsPage() {
         <div className="space-y-4">
           <h2 className="text-xl font-bold">Manage Uploads</h2>
           {videos.length === 0 && <p className="opacity-50 text-sm">No videos uploaded yet.</p>}
-          {videos.map((vid) => (
+          {videos.map((vid) => {
+            const vidCategory = (vid as any).category || 'clips';
+            const categoryLabel = BTS_CATEGORIES.find(c => c.id === vidCategory)?.label || 'Exclusive Clips';
+
+            return (
             <div key={vid.id} className={`bg-gray-800 rounded-2xl p-6 border transition-all flex flex-col md:flex-row justify-between items-start md:items-center gap-4 ${
-              editingId === vid.id ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-gray-700'
+              editingId === vid.id ? 'border-yellow-500 shadow-[0_0_15px_rgba(234,179,8,0.2)]' : 'border-gray-700 hover:border-gray-500'
             }`}>
               <div>
-                <div className="flex items-center gap-3 mb-1">
-                  <h3 className="font-bold text-lg">{vid.title}</h3>
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <h3 className="font-bold text-lg mr-2">{vid.title}</h3>
                   <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${
                     vid.required_tier === 'premium' ? 'bg-purple-500/20 text-purple-400 border border-purple-500' :
                     vid.required_tier === 'standard' ? 'bg-blue-500/20 text-blue-400 border border-blue-500' :
                     'bg-gray-500/20 text-gray-400 border border-gray-500'
                   }`}>
-                    {vid.required_tier}
+                    {vid.required_tier} Tier
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-gray-900 text-gray-300 border border-gray-700">
+                    {categoryLabel}
                   </span>
                 </div>
                 <p className="text-sm opacity-60 line-clamp-1">{vid.description}</p>
                 <p className="text-xs font-mono opacity-40 mt-1">{vid.duration} • ID: {vid.id}</p>
               </div>
               
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => startEdit(vid)} className="px-4 py-2 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg hover:border-yellow-500 hover:text-yellow-500 text-sm font-bold transition-colors">
+              <div className="flex gap-2 shrink-0 w-full md:w-auto mt-2 md:mt-0">
+                <button onClick={() => startEdit(vid)} className="flex-1 md:flex-none px-4 py-2 bg-gray-900 border border-gray-700 text-gray-300 rounded-lg hover:border-yellow-500 hover:text-yellow-500 text-sm font-bold transition-colors">
                   Edit
                 </button>
-                <button onClick={() => { deleteBtsVideo(vid.id); load(); }} className="px-4 py-2 bg-gray-900 border border-gray-700 text-red-400 rounded-lg hover:border-red-500 text-sm font-bold transition-colors">
+                <button onClick={() => { 
+                  if(window.confirm("Are you sure you want to delete this asset?")) {
+                    deleteBtsVideo(vid.id).then(load); 
+                  }
+                }} className="flex-1 md:flex-none px-4 py-2 bg-gray-900 border border-gray-700 text-red-400 rounded-lg hover:border-red-500 hover:bg-red-500/10 text-sm font-bold transition-colors">
                   Delete
                 </button>
               </div>
             </div>
-          ))}
+          )})}
         </div>
 
       </div>
