@@ -107,8 +107,8 @@ export default function MissionDetailPage() {
     try {
       // If there is a poll, submit the vote first (+5 points via DB trigger)
       if (poll && optionId) {
-        const tier = user.tier === 'premium' ? 'premium' : 'standard';
-        await submitVote(poll.id, optionId, user.id, tier);
+        // Tiers are removed; pass only pollId, optionId, and userId
+        await submitVote(poll.id, optionId, user.id);
         setHasVoted(true);
       }
 
