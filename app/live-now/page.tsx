@@ -110,7 +110,7 @@ export default function LiveNowPage() {
     setIsVoting(true);
 
     try {
-      await submitVote(pollId, optionId, user.id, 'ppv');
+      await submitVote(pollId, optionId, user.id);
       
       const newBalance = user.votesAvailable - 1;
       const updatedUser = { ...user, votesAvailable: newBalance };
@@ -162,7 +162,6 @@ export default function LiveNowPage() {
 
       <div className="w-full lg:w-[30%] bg-gray-900 flex flex-col max-h-[calc(100vh-76px)] overflow-hidden">
         
-        {/* CLEANED UP HEADER: Only shows Live Decisions title */}
         <div className="p-6 border-b border-gray-800 bg-gray-950 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-bold text-primary">Live Decisions</h2>
         </div>
@@ -229,7 +228,6 @@ export default function LiveNowPage() {
                           </div>
                         ) : (
                           <div className="space-y-3">
-                            {/* CLEANED UP: Removed the -1 Balance text */}
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cast your vote</p>
                             {poll.options.map((opt) => (
                               <button
