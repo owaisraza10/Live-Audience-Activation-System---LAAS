@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
-// Interface matching our PPV User
 interface PPVUser {
   id: string;
   name: string;
@@ -16,8 +15,6 @@ interface PPVUser {
 export default function BuyVotesPage() {
   const router = useRouter();
   const [user, setUser] = useState<PPVUser | null>(null);
-  const [isPurchasing, setIsPurchasing] = useState<string | null>(null);
-  const [purchaseSuccess, setPurchaseSuccess] = useState(false);
 
   useEffect(() => {
     const session = localStorage.getItem('laas_user');
@@ -28,27 +25,6 @@ export default function BuyVotesPage() {
     setUser(JSON.parse(session));
   }, [router]);
 
-  const handlePurchase = (packId: string, votesToAdd: number) => {
-    if (!user) return;
-    setIsPurchasing(packId);
-
-    // Mocking the payment gateway processing time
-    setTimeout(() => {
-      const newBalance = (user.votesAvailable || 0) + votesToAdd;
-      const updatedUser = { ...user, votesAvailable: newBalance };
-      
-      // Update local state and storage
-      setUser(updatedUser);
-      localStorage.setItem('laas_user', JSON.stringify(updatedUser));
-      
-      setIsPurchasing(null);
-      setPurchaseSuccess(true);
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => setPurchaseSuccess(false), 3000);
-    }, 1500);
-  };
-
   if (!user) return null;
 
   const votePacks = [
@@ -58,7 +34,7 @@ export default function BuyVotesPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-black text-white font-sans pb-20">
+    <div className="min-h-screen bg-black text-white font-sans pb-20 animate-fade-in">
       {/* Header Section */}
       <div className="bg-gray-900 border-b border-gray-800 pt-16 pb-12 px-6 text-center">
         <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">Boost Your Influence</h1>
@@ -73,13 +49,6 @@ export default function BuyVotesPage() {
           </span>
         </div>
       </div>
-
-      {/* Success Toast */}
-      {purchaseSuccess && (
-        <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-50 bg-green-500 text-black px-6 py-3 rounded-full font-bold shadow-[0_0_20px_rgba(34,197,94,0.4)] animate-fade-in flex items-center gap-2">
-          <span>✅</span> Payment Successful! Votes added to your balance.
-        </div>
-      )}
 
       {/* Pricing Grid */}
       <div className="max-w-6xl mx-auto px-6 py-16">
@@ -110,21 +79,17 @@ export default function BuyVotesPage() {
                 <span className="text-gray-500 font-bold ml-2">Votes</span>
               </div>
               
-              <button 
-                onClick={() => handlePurchase(pack.id, pack.votes)}
-                disabled={isPurchasing !== null}
-                className={`mt-auto w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all ${
-                  pack.popular 
-                    ? 'bg-primary text-on-primary hover:brightness-110 shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]' 
-                    : 'bg-gray-800 text-white hover:bg-gray-700'
-                } disabled:opacity-50 flex justify-center items-center gap-2`}
-              >
-                {isPurchasing === pack.id ? (
-                  <span className="animate-pulse">Processing...</span>
-                ) : (
-                  <>Buy for {pack.price}</>
-                )}
-              </button>
+              <Link href={`/checkout?pack=${pack.id}`} className="mt-auto w-full">
+                <button 
+                  className={`w-full py-4 rounded-xl font-bold uppercase tracking-widest transition-all ${
+                    pack.popular 
+                      ? 'bg-primary text-on-primary hover:brightness-110 shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]' 
+                      : 'bg-gray-800 text-white hover:bg-gray-700'
+                  } flex justify-center items-center gap-2`}
+                >
+                  Buy for {pack.price}
+                </button>
+              </Link>
             </div>
           ))}
         </div>
