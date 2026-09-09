@@ -55,11 +55,7 @@ export default function Footer() {
                 📸
               </a>
             </div>
-            <div className="mt-6">
-              <Link href="/join" className="text-xs font-bold uppercase tracking-wider text-primary hover:underline">
-                Become a VIP Member →
-              </Link>
-            </div>
+            
           </div>
 
         </div>

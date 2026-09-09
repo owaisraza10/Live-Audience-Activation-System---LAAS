@@ -5,18 +5,27 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
 export default function Navbar() {
-  // --- AUTH STATE ---
-  const [user, setUser] = useState<{ email: string; tier: string } | null>(null);
+  // Updated state for PPV User
+  const [user, setUser] = useState<{ email: string; votesAvailable?: number } | null>(null);
   const pathname = usePathname();
   const router = useRouter();
 
   useEffect(() => {
-    const session = localStorage.getItem('laas_user');
-    if (session) {
-      setUser(JSON.parse(session));
-    } else {
-      setUser(null);
-    }
+    const loadUser = () => {
+      const session = localStorage.getItem('laas_user');
+      if (session) {
+        setUser(JSON.parse(session));
+      } else {
+        setUser(null);
+      }
+    };
+
+    // Load initially
+    loadUser();
+
+    // Listen for cross-tab or manual storage updates to keep the balance fresh
+    window.addEventListener('storage', loadUser);
+    return () => window.removeEventListener('storage', loadUser);
   }, [pathname]);
 
   const handleLogout = () => {
@@ -36,7 +45,7 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className="flex items-center justify-between p-4 shadow-md sticky top-0 z-50 transition-all" 
+    <nav className="flex items-center justify-between p-4 shadow-md sticky top-0 z-50 transition-all border-b border-gray-800" 
          style={{ backgroundColor: 'var(--m3-surface)', color: 'var(--m3-on-surface)' }}>
       
       <div className="text-2xl font-bold" style={{ color: 'var(--m3-primary)' }}>
@@ -60,14 +69,14 @@ export default function Navbar() {
           <div className="flex items-center gap-4 animate-fade-in">
             <div className="hidden md:flex flex-col text-right">
               <span className="text-sm font-bold opacity-80">{user.email}</span>
-              <span className="text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--m3-primary)' }}>
-                {user.tier} Tier
+              {/* NOW SHOWS VOTE BALANCE INSTEAD OF TIER */}
+              <span className="text-xs font-bold tracking-wider text-green-400">
+                🎟️ {user.votesAvailable ?? 0} Votes Available
               </span>
             </div>
             
-            {/* Avatar links to profile */}
             <Link href="/profile">
-              <div className="h-10 w-10 flex items-center justify-center font-bold text-lg hover:opacity-80 transition-opacity cursor-pointer"
+              <div className="h-10 w-10 flex items-center justify-center font-bold text-lg hover:opacity-80 transition-opacity cursor-pointer border border-gray-700 shadow-sm"
                    style={{ 
                      backgroundColor: 'var(--m3-primary)', 
                      color: 'var(--m3-on-primary)',
@@ -79,7 +88,7 @@ export default function Navbar() {
             
             <button 
               onClick={handleLogout}
-              className="px-4 py-2 font-bold text-sm transition-opacity hover:opacity-80"
+              className="px-4 py-2 font-bold text-sm transition-opacity hover:opacity-80 border border-gray-700"
               style={{ 
                 backgroundColor: 'var(--m3-surface-variant)', 
                 color: 'var(--m3-on-surface-variant)',
@@ -99,7 +108,7 @@ export default function Navbar() {
               borderRadius: 'var(--m3-radius-large)'
             }}
           >
-            Join LAAS
+            Join Free
           </Link>
         )}
       </div>

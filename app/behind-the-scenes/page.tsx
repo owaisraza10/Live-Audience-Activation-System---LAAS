@@ -17,20 +17,14 @@ const BTS_CATEGORIES = [
 
 export default function BehindTheScenes() {
   const router = useRouter();
-  const [user, setUser] = useState<{ tier: string } | null>(null);
+  // Using a simplified user state since tiers are gone
+  const [user, setUser] = useState<{ id: string; name: string; email: string } | null>(null);
   const [videos, setVideos] = useState<BtsVideo[]>([]);
   const [activeCategory, setActiveCategory] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  // Hierarchy of tiers to check permissions
-  const tierWeights: Record<string, number> = {
-    free: 0,
-    standard: 1,
-    premium: 2,
-  };
-
   useEffect(() => {
-    // 1. Auth check
+    // 1. Auth check - Only requirement is being a registered user
     const session = localStorage.getItem('laas_user');
     if (!session) {
       router.push('/join');
@@ -58,23 +52,13 @@ export default function BehindTheScenes() {
     return () => window.removeEventListener('storage', onStorage);
   }, [router]);
 
-  // Bulletproof permission logic
-  const canWatch = (requiredTier?: string) => {
-    if (!user) return false;
-    const userLevel = (user.tier || 'free').toLowerCase();
-    const reqLevel = (requiredTier || 'free').toLowerCase();
-    const userWeight = tierWeights[userLevel] ?? 0;
-    const reqWeight = tierWeights[reqLevel] ?? 0;
-    return userWeight >= reqWeight;
-  };
-
   if (!user) return null;
 
   // Filter logic (Defaults existing DB items without a category to 'clips')
   const filteredVideos = videos.filter(video => {
     if (activeCategory === 'all') return true;
     
-    // Safely cast to any to check for category in case your TS type doesn't have it yet
+    // Safely cast to any to check for category
     const videoCat = ((video as any).category || 'clips').toLowerCase();
     return videoCat === activeCategory;
   });
@@ -92,19 +76,9 @@ export default function BehindTheScenes() {
             </p>
           </div>
           <div className="flex flex-col items-start md:items-end gap-2 shrink-0">
-            <span className="text-xs font-bold uppercase tracking-widest opacity-60">Current Access Level</span>
-            <div className={`px-4 py-2 rounded-lg text-sm font-bold tracking-wider uppercase border shadow-lg ${
-              user.tier === 'premium' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30' :
-              user.tier === 'standard' ? 'bg-blue-500/10 text-blue-400 border-blue-500/30' :
-              'bg-gray-800 text-gray-300 border-gray-700'
-            }`}>
-              {user.tier} Member
+            <div className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm font-bold tracking-wider text-gray-300">
+              ✓ Access Granted
             </div>
-            {user.tier === 'free' && (
-              <Link href="/checkout" className="text-xs text-primary hover:underline font-bold mt-1">
-                Upgrade for Full Access →
-              </Link>
-            )}
           </div>
         </div>
       </div>
@@ -154,89 +128,57 @@ export default function BehindTheScenes() {
         {!loading && filteredVideos.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {filteredVideos.map((video) => {
-              const safeTier = (video.required_tier || 'free').toLowerCase();
-              const hasAccess = canWatch(video.required_tier);
               const videoCategory = ((video as any).category || 'clips').toLowerCase();
               
               return (
               <div key={video.id} className="bg-gray-900 rounded-2xl overflow-hidden flex flex-col border border-gray-800 relative group hover:border-gray-600 transition-colors shadow-lg">
                 
-                {/* CATEGORY & TIER BADGES */}
-                <div className="absolute top-4 left-4 z-10 flex flex-col gap-2">
-                  <div className={`text-xs font-black px-3 py-1 rounded-md tracking-widest uppercase shadow-md ${
-                    safeTier === 'premium' ? 'bg-yellow-500 text-black' :
-                    safeTier === 'standard' ? 'bg-blue-600 text-white' :
-                    'bg-gray-200 text-gray-800'
-                  }`}>
-                    {safeTier === 'free' ? 'Free Access' : `${safeTier} Exclusive`}
-                  </div>
-                  
-                  {/* Category Pill (Only show if viewing "All") */}
-                  {activeCategory === 'all' && (
-                    <div className="text-[10px] font-bold px-2 py-1 rounded bg-black/60 text-white backdrop-blur-sm border border-white/10 uppercase w-fit">
+                {/* CATEGORY BADGE */}
+                {activeCategory === 'all' && (
+                  <div className="absolute top-4 left-4 z-10">
+                    <div className="text-[10px] font-bold px-3 py-1.5 rounded bg-black/70 text-white backdrop-blur-md border border-white/10 uppercase tracking-widest shadow-lg">
                       {BTS_CATEGORIES.find(c => c.id === videoCategory)?.label || 'Exclusive'}
+                    </div>
+                  </div>
+                )}
+
+                {/* VIDEO PLAYER */}
+                <div className="aspect-video bg-black w-full relative group-hover:brightness-110 transition-all">
+                  {video.video_url.includes('youtube') ? (
+                    <iframe 
+                      src={video.video_url.replace('watch?v=', 'embed/')} 
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                    />
+                  ) : video.video_url.includes('drive.google.com') ? (
+                    <iframe 
+                      src={video.video_url.replace('/view', '/preview').replace('/edit', '/preview')} 
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                    />
+                  ) : (
+                    <video controls className="w-full h-full object-cover">
+                      <source src={video.video_url} type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
+                  )}
+                  {video.duration && (
+                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded font-mono font-bold">
+                      {video.duration}
                     </div>
                   )}
                 </div>
 
-                {/* CONDITIONAL VIDEO PLAYER OR LOCK SCREEN */}
-                {hasAccess ? (
-                  <div className="aspect-video bg-black w-full relative">
-                    {video.video_url.includes('youtube') ? (
-                      <iframe 
-                        src={video.video_url.replace('watch?v=', 'embed/')} 
-                        className="w-full h-full border-0"
-                        allowFullScreen
-                      />
-                    ) : video.video_url.includes('drive.google.com') ? (
-                      <iframe 
-                        src={video.video_url.replace('/view', '/preview').replace('/edit', '/preview')} 
-                        className="w-full h-full border-0"
-                        allowFullScreen
-                      />
-                    ) : (
-                      <video controls className="w-full h-full object-cover">
-                        <source src={video.video_url} type="video/mp4" />
-                        Your browser does not support the video tag.
-                      </video>
-                    )}
-                    <div className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1 rounded font-mono font-bold">
-                      {video.duration || 'Live'}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="aspect-video bg-gray-950 w-full flex flex-col items-center justify-center p-6 text-center border-b border-gray-800 relative overflow-hidden">
-                    {/* Blurred background effect */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-gray-900 to-black opacity-50"></div>
-                    
-                    <span className="text-4xl mb-3 relative z-10 drop-shadow-lg">🔒</span>
-                    <h3 className="font-bold text-lg mb-1 relative z-10 text-white">
-                      Requires {safeTier.charAt(0).toUpperCase() + safeTier.slice(1)} Tier
-                    </h3>
-                    <p className="text-xs opacity-60 mb-4 max-w-[220px] relative z-10">
-                      Upgrade to unlock this {BTS_CATEGORIES.find(c => c.id === videoCategory)?.label || 'content'}.
-                    </p>
-                    <button 
-                      onClick={() => router.push('/checkout')}
-                      className="relative z-10 bg-primary text-on-primary px-5 py-2 rounded-lg font-bold text-xs uppercase tracking-wider hover:brightness-110 transition-all shadow-[0_0_15px_rgba(var(--primary-rgb),0.2)]"
-                    >
-                      Upgrade to VIP
-                    </button>
-                  </div>
-                )}
-
                 {/* CONTENT DETAILS */}
                 <div className="p-6 flex-grow flex flex-col justify-between bg-gray-900">
                   <div>
-                    <h3 className="text-xl font-bold mb-2 text-white group-hover:text-primary transition-colors" style={{ opacity: hasAccess ? 1 : 0.6 }}>
+                    <h3 className="text-xl font-bold mb-2 text-white group-hover:text-primary transition-colors">
                       {video.title}
                     </h3>
-                    <p className="text-sm text-gray-400 leading-relaxed line-clamp-3" style={{ opacity: hasAccess ? 1 : 0.5 }}>
+                    <p className="text-sm text-gray-400 leading-relaxed line-clamp-3">
                       {video.description}
                     </p>
                   </div>
-                  
-                  {/* Footer metadata could go here (e.g., date added) */}
                 </div>
               </div>
             )})}

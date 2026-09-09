@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { type BtsVideo } from '../../../lib/types';
 import { getAllBtsVideos, uploadBtsVideo, deleteBtsVideo, updateBtsVideo } from '../../../lib/api/bts';
 
-// The categories matching the front-end Hub
+// Categories matching the front-end Hub
 const BTS_CATEGORIES = [
   { id: 'cameras', label: '24/7 Cameras' },
   { id: 'production', label: 'Production Room' },
@@ -23,8 +23,7 @@ export default function AdminBtsPage() {
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [duration, setDuration] = useState('');
-  const [requiredTier, setRequiredTier] = useState<'free' | 'standard' | 'premium'>('premium');
-  const [category, setCategory] = useState('clips'); // NEW: Category State
+  const [category, setCategory] = useState('clips'); 
 
   async function load() {
     setVideos(await getAllBtsVideos());
@@ -43,11 +42,7 @@ export default function AdminBtsPage() {
     setDescription(vid.description);
     setVideoUrl(vid.video_url);
     setDuration(vid.duration);
-    setRequiredTier(vid.required_tier);
-    // Safely grab category if it exists, otherwise default to clips
     setCategory((vid as any).category || 'clips'); 
-    
-    // Smooth scroll to the top of the form for good UX
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -57,8 +52,7 @@ export default function AdminBtsPage() {
     setDescription('');
     setVideoUrl('');
     setDuration('');
-    setRequiredTier('premium');
-    setCategory('clips'); // Reset category
+    setCategory('clips');
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -66,7 +60,6 @@ export default function AdminBtsPage() {
     setIsUploading(true);
     setProgress(0);
 
-    // Mock progress bar
     const interval = setInterval(() => {
       setProgress((p) => {
         if (p >= 100) {
@@ -78,27 +71,23 @@ export default function AdminBtsPage() {
     }, 200);
 
     setTimeout(async () => {
-      // We cast as `any` here just in case your `BtsVideo` type in lib/types.ts 
-      // hasn't been updated with the `category?: string` property yet.
       const payload: any = {
         title,
         description,
         video_url: videoUrl,
         duration: duration || '0:00',
-        required_tier: requiredTier,
-        category: category 
+        category: category,
+        required_tier: 'free' // Hardcoded to satisfy DB constraint without showing in UI
       };
 
       if (editingId) {
-        // UPDATE existing video
         await updateBtsVideo(editingId, payload);
       } else {
-        // CREATE new video
         payload.thumbnail_url = ''; 
         await uploadBtsVideo(payload);
       }
       
-      cancelEdit(); // Clears form and resets state
+      cancelEdit(); 
       setIsUploading(false);
       setProgress(0);
       load();
@@ -113,7 +102,7 @@ export default function AdminBtsPage() {
           <h1 className="text-3xl font-bold text-red-500 tracking-widest uppercase mb-1">
             BTS Asset Manager
           </h1>
-          <p className="opacity-70">Upload and categorize tiered content for the Vault.</p>
+          <p className="opacity-70">Upload and categorize content for the Vault.</p>
         </div>
 
         {/* EDITOR FORM */}
@@ -148,33 +137,18 @@ export default function AdminBtsPage() {
               </div>
             </div>
 
-            {/* CONFIGURATION ROW: TIER AND CATEGORY */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-700 pt-4 mt-2">
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Content Category</label>
-                <select 
-                  value={category} 
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-primary text-white font-bold"
-                >
-                  {BTS_CATEGORIES.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.label}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Required Access Tier</label>
-                <select 
-                  value={requiredTier} 
-                  onChange={(e) => setRequiredTier(e.target.value as any)}
-                  className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-blue-500 text-white font-bold"
-                >
-                  <option value="free">Free (Everyone can watch)</option>
-                  <option value="standard">Standard (Standard & Premium)</option>
-                  <option value="premium">Premium Only (VIP Exclusive)</option>
-                </select>
-              </div>
+            {/* CATEGORY CONFIGURATION */}
+            <div className="border-t border-gray-700 pt-4 mt-2">
+              <label className="block text-sm font-bold mb-2 opacity-80">Content Category</label>
+              <select 
+                value={category} 
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full p-4 rounded-xl bg-gray-900 border border-gray-700 focus:outline-none focus:border-primary text-white font-bold"
+              >
+                {BTS_CATEGORIES.map(cat => (
+                  <option key={cat.id} value={cat.id}>{cat.label}</option>
+                ))}
+              </select>
             </div>
 
             {isUploading ? (
@@ -214,13 +188,6 @@ export default function AdminBtsPage() {
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
                   <h3 className="font-bold text-lg mr-2">{vid.title}</h3>
-                  <span className={`text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded ${
-                    vid.required_tier === 'premium' ? 'bg-purple-500/20 text-purple-400 border border-purple-500' :
-                    vid.required_tier === 'standard' ? 'bg-blue-500/20 text-blue-400 border border-blue-500' :
-                    'bg-gray-500/20 text-gray-400 border border-gray-500'
-                  }`}>
-                    {vid.required_tier} Tier
-                  </span>
                   <span className="text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded bg-gray-900 text-gray-300 border border-gray-700">
                     {categoryLabel}
                   </span>

@@ -3,273 +3,171 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { signIn, signUp, getCurrentUser } from '../../lib/api/auth';
+import { supabase } from '../../lib/supabase'; // 🔥 Added Supabase import
 
 export default function JoinPage() {
-  const [view, setView] = useState<'tiers' | 'login' | 'signup'>('tiers');
   const router = useRouter();
-
-  // Real Auth State
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
-  // UI State
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    country: '',
+    agreedToTerms: false
+  });
 
-  // --- BULLETPROOF AUTH HANDLER ---
-  const handleAuth = async (e: React.FormEvent, isSignup: boolean) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-    setSuccess('');
-    setLoading(true);
-    
+    if (!formData.agreedToTerms) {
+      alert("You must agree to the Terms of Service to join LAAS.");
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      if (isSignup) {
-        await signUp(email, password);
-        setSuccess("Account created successfully! You can now log in.");
-        setView('login');
-        setPassword(''); 
-        setLoading(false);
-        return; 
-      } else {
-        await signIn(email, password);
+      const newUserId = crypto.randomUUID();
+
+      // 🔥 INSERT THE USER INTO SUPABASE SO THEY OFFICIALLY EXIST
+      const { error } = await supabase.from('users').insert({
+        id: newUserId,
+        email: formData.email,
+        name: formData.name,
+      });
+
+      if (error) {
+        console.warn("DB Insert Note:", error.message);
       }
 
-      const profile = await getCurrentUser();
+      // Create the local session
+      const newUser = {
+        id: newUserId,
+        name: formData.name,
+        email: formData.email,
+        country: formData.country,
+        votesAvailable: 1, // First vote is free!
+        points: 0
+      };
+
+      localStorage.setItem('laas_user', JSON.stringify(newUser));
+      window.dispatchEvent(new Event('storage'));
       
-      if (profile) {
-        localStorage.setItem('laas_user', JSON.stringify(profile));
-        router.push('/behind-the-scenes');
-      } else {
-        throw "Could not load user profile.";
-      }
-      
-    } catch (err: any) {
-      // Print the EXACT error from Supabase
-      setError(String(err));
+      router.push('/live-events');
+    } catch (err) {
+      console.error(err);
+      alert("Registration failed.");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-8">
+    <div className="min-h-[calc(100vh-76px)] bg-black text-white flex flex-col md:flex-row font-sans">
       
-      {/* AUTH TOGGLE */}
-      <div className="flex justify-center pt-4">
-        <div className="flex bg-surface-variant p-2 rounded-full" style={{ width: 'fit-content' }}>
-          <button 
-            onClick={() => { setView('tiers'); setError(''); setSuccess(''); }}
-            className={`px-8 py-3 rounded-full font-bold transition-all ${view === 'tiers' || view === 'signup' ? 'bg-primary text-on-primary shadow-md' : 'opacity-70 hover:opacity-100'}`}
-          >
-            Join LAAS (Sign Up)
-          </button>
-          <button 
-            onClick={() => { setView('login'); setError(''); setSuccess(''); }}
-            className={`px-8 py-3 rounded-full font-bold transition-all ${view === 'login' ? 'bg-primary text-on-primary shadow-md' : 'opacity-70 hover:opacity-100'}`}
-          >
-            Log In
-          </button>
+      {/* LEFT SIDE: The LAAS Model Explanation */}
+      <div className="w-full md:w-1/2 bg-gray-950 p-8 md:p-16 flex flex-col justify-center border-r border-gray-800">
+        <div className="max-w-md mx-auto md:mx-0">
+          <Link href="/" className="text-4xl font-black tracking-widest text-primary mb-8 inline-block">
+            LAAS
+          </Link>
+          <h1 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
+            Shape the Narrative.
+          </h1>
+          <p className="text-gray-400 text-lg mb-12">
+            Join the next generation of interactive broadcasting. No subscriptions. No monthly fees. You control how much influence you exert.
+          </p>
+
+          <div className="space-y-8">
+            <div className="flex gap-4 items-start">
+              <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center shrink-0 text-xl">🎟️</div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">Register Free</h3>
+                <p className="text-gray-500 text-sm">Sign up in seconds. No credit card required.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-start">
+              <div className="w-12 h-12 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center shrink-0 text-xl text-primary">🎁</div>
+              <div>
+                <h3 className="font-bold text-lg mb-1 text-primary">Your First Vote is Free</h3>
+                <p className="text-gray-500 text-sm">Jump straight into the broadcast and make your first live decision on us.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-start">
+              <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center shrink-0 text-xl">⚡</div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">Pay-per-Vote & Boosts</h3>
+                <p className="text-gray-500 text-sm">Want to swing the vote? Buy extra votes or Boost Influence only when you need it.</p>
+              </div>
+            </div>
+
+            <div className="flex gap-4 items-start">
+              <div className="w-12 h-12 rounded-full bg-gray-900 border border-gray-700 flex items-center justify-center shrink-0 text-xl">🏆</div>
+              <div>
+                <h3 className="font-bold text-lg mb-1">Audience Legacy System</h3>
+                <p className="text-gray-500 text-sm">Earn badges and rewards based on your interactions and tasks. Marketing status is earned, never bought.</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* VIEW 1: TIER SELECTION */}
-      {view === 'tiers' && (
-        <div className="space-y-12 animate-fade-in">
-          <div className="text-center space-y-4 max-w-3xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold text-primary">Join the Live Audience</h1>
-            <p className="text-xl opacity-70">
-              Select your tier to activate your account. Your decisions shape the show.
+      {/* RIGHT SIDE: Registration Form */}
+      <div className="w-full md:w-1/2 p-8 md:p-16 flex flex-col justify-center bg-gray-900 relative">
+        <div className="max-w-md mx-auto w-full">
+          <h2 className="text-3xl font-bold mb-2">Create your account</h2>
+          <p className="text-gray-400 mb-8">Enter your details to claim your free vote.</p>
+
+          <form onSubmit={handleRegister} className="space-y-5">
+            <div>
+              <label className="block text-sm font-bold mb-2 opacity-80 uppercase tracking-wider text-xs">Full Name</label>
+              <input required type="text" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="John Doe" className="w-full p-4 rounded-xl bg-gray-950 border border-gray-800 focus:outline-none focus:border-primary text-white" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-2 opacity-80 uppercase tracking-wider text-xs">Email Address</label>
+              <input required type="email" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} placeholder="john@example.com" className="w-full p-4 rounded-xl bg-gray-950 border border-gray-800 focus:outline-none focus:border-primary text-white" />
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold mb-2 opacity-80 uppercase tracking-wider text-xs">Country</label>
+              <select required value={formData.country} onChange={(e) => setFormData({...formData, country: e.target.value})} className="w-full p-4 rounded-xl bg-gray-950 border border-gray-800 focus:outline-none focus:border-primary text-white appearance-none">
+                <option value="" disabled>Select your country...</option>
+                <option value="US">United States</option>
+                <option value="UK">United Kingdom</option>
+                <option value="CA">Canada</option>
+                <option value="AU">Australia</option>
+                <option value="IN">India</option>
+                <option value="EU">Europe (Other)</option>
+                <option value="OT">Other</option>
+              </select>
+            </div>
+
+            <div className="pt-2">
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <div className="relative flex items-center justify-center mt-1">
+                  <input type="checkbox" required checked={formData.agreedToTerms} onChange={(e) => setFormData({...formData, agreedToTerms: e.target.checked})} className="w-5 h-5 rounded border-gray-700 bg-gray-950 appearance-none checked:bg-primary checked:border-primary transition-colors cursor-pointer peer" />
+                  <span className="absolute text-black opacity-0 peer-checked:opacity-100 pointer-events-none font-bold text-xs">✓</span>
+                </div>
+                <span className="text-sm text-gray-400 group-hover:text-gray-300 transition-colors">
+                  I agree to the <Link href="/terms" className="text-primary hover:underline">Terms of Service</Link> and acknowledge that my marketing and legacy status will be determined solely by my activity on the platform.
+                </span>
+              </label>
+            </div>
+
+            <button type="submit" disabled={isLoading} className="w-full mt-4 p-4 rounded-xl bg-primary text-on-primary font-bold uppercase tracking-widest hover:brightness-110 disabled:opacity-50 transition-all shadow-[0_0_20px_rgba(var(--primary-rgb),0.3)]">
+              {isLoading ? 'Creating Account...' : 'Join & Claim Free Vote'}
+            </button>
+          </form>
+          
+          <div className="mt-8 text-center border-t border-gray-800 pt-6">
+            <p className="text-sm text-gray-500">
+              Already have an account? <Link href="/login" className="text-white font-bold hover:text-primary transition-colors">Sign in</Link>
             </p>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch pt-4">
-            {/* FREE TIER */}
-            <div className="m3-card flex flex-col border border-gray-200 shadow-none">
-              <h2 className="text-2xl font-bold mb-2">Observer (Free)</h2>
-              <div className="text-4xl font-bold mb-6">$0<span className="text-lg opacity-60 font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-grow opacity-80">
-                <li className="flex gap-2"><span>✓</span> Watch live events</li>
-                <li className="flex gap-2"><span>✓</span> Access basic chat</li>
-                <li className="flex gap-2"><span>✓</span> View live poll results</li>
-                <li className="flex gap-2 opacity-40"><span>—</span> Cannot vote on decisions</li>
-              </ul>
-              <button 
-                onClick={() => setView('signup')}
-                className="w-full py-3 rounded-full font-bold border-2 transition-colors hover:bg-primary hover:text-on-primary"
-                style={{ borderColor: 'var(--m3-primary)', color: 'var(--m3-primary)' }}
-              >
-                Select Free
-              </button>
-            </div>
-
-            {/* STANDARD TIER */}
-            <div className="m3-card flex flex-col relative scale-105 shadow-md" 
-                 style={{ backgroundColor: 'var(--m3-surface-variant)' }}>
-              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-primary text-on-primary text-xs font-bold uppercase tracking-wider py-1 px-4 rounded-full">
-                Most Popular
-              </div>
-              <h2 className="text-2xl font-bold mb-2 mt-2">Activator</h2>
-              <div className="text-4xl font-bold mb-6">$4.99<span className="text-lg opacity-60 font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-grow opacity-80">
-                <li className="flex gap-2"><span>✓</span> Watch live events & chat</li>
-                <li className="flex gap-2 font-bold text-primary"><span>✓</span> Vote on live decisions</li>
-                <li className="flex gap-2"><span>✓</span> Earn standard badges</li>
-                <li className="flex gap-2"><span>✓</span> 72-hour Replay (VOD) access</li>
-              </ul>
-              <Link href="/checkout" className="block w-full">
-                <button className="w-full py-3 rounded-full font-bold hover:shadow-lg transition-shadow"
-                        style={{ backgroundColor: 'var(--m3-primary)', color: 'var(--m3-on-primary)' }}>
-                  Select Standard
-                </button>
-              </Link>
-            </div>
-
-            {/* PREMIUM TIER */}
-            <div className="m3-card flex flex-col border-2" 
-                 style={{ borderColor: 'var(--m3-primary)' }}>
-              <h2 className="text-2xl font-bold mb-2">VIP Legacy</h2>
-              <div className="text-4xl font-bold mb-6">$9.99<span className="text-lg opacity-60 font-normal">/mo</span></div>
-              <ul className="space-y-4 mb-8 flex-grow opacity-80">
-                <li className="flex gap-2"><span>✓</span> All Standard features</li>
-                <li className="flex gap-2 font-bold text-primary"><span>✓</span> 2x Voting Power multiplier</li>
-                <li className="flex gap-2"><span>✓</span> Permanent VOD access</li>
-                <li className="flex gap-2"><span>✓</span> Exclusive legacy badges</li>
-              </ul>
-              <Link href="/checkout" className="block w-full">
-                <button className="w-full py-3 rounded-full font-bold hover:shadow-lg transition-shadow"
-                        style={{ backgroundColor: 'var(--m3-primary)', color: 'var(--m3-on-primary)' }}>
-                  Select Premium
-                </button>
-              </Link>
-            </div>
-          </div>
         </div>
-      )}
-
-      {/* VIEW 2: LOGIN FORM */}
-      {view === 'login' && (
-        <div className="max-w-md mx-auto pt-8 animate-fade-in">
-          <div className="m3-card">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-primary mb-2">Welcome Back</h2>
-              <p className="opacity-70">Log in to activate your audience power.</p>
-            </div>
-            
-            {success && (
-              <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-xl text-sm text-center border border-green-200 font-bold">
-                {success}
-              </div>
-            )}
-
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm text-center border border-red-200 font-bold">
-                {error}
-              </div>
-            )}
-            
-            <form className="space-y-6" onSubmit={(e) => handleAuth(e, false)}>
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Email Address</label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="w-full p-4 rounded-[16px] border border-gray-300 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-transparent"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Password</label>
-                <input 
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  required
-                  className="w-full p-4 rounded-[16px] border border-gray-300 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-transparent"
-                />
-              </div>
-              
-              <button 
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 rounded-[28px] font-bold text-lg hover:shadow-lg transition-shadow mt-4 disabled:opacity-50"
-                style={{ backgroundColor: 'var(--m3-primary)', color: 'var(--m3-on-primary)' }}
-              >
-                {loading ? 'Authenticating...' : 'Sign In'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* VIEW 3: SIGNUP FORM (FREE TIER) */}
-      {view === 'signup' && (
-        <div className="max-w-md mx-auto pt-8 animate-fade-in">
-          <div className="m3-card">
-            <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-primary mb-2">Create Free Account</h2>
-              <p className="opacity-70">Create your observer account to watch and chat.</p>
-            </div>
-            
-            {error && (
-              <div className="mb-6 p-4 bg-red-50 text-red-600 rounded-xl text-sm text-center border border-red-200 font-bold">
-                {error}
-              </div>
-            )}
-            
-            <form className="space-y-6" onSubmit={(e) => handleAuth(e, true)}>
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Email Address</label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="w-full p-4 rounded-[16px] border border-gray-300 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-transparent"
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-bold mb-2 opacity-80">Password</label>
-                <input 
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Create a password (min 6 chars)"
-                  required
-                  minLength={6}
-                  className="w-full p-4 rounded-[16px] border border-gray-300 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary bg-transparent"
-                />
-              </div>
-              
-              <button 
-                type="submit"
-                disabled={loading}
-                className="w-full py-4 rounded-[28px] font-bold text-lg hover:shadow-lg transition-shadow mt-4 disabled:opacity-50"
-                style={{ backgroundColor: 'var(--m3-primary)', color: 'var(--m3-on-primary)' }}
-              >
-                {loading ? 'Creating Account...' : 'Create Account'}
-              </button>
-            </form>
-            <div className="mt-6 text-center">
-              <button 
-                onClick={() => { setView('tiers'); setError(''); }}
-                className="text-sm opacity-60 hover:opacity-100 hover:text-primary transition-all font-bold"
-              >
-                ← Back to Tiers
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      </div>
     </div>
   );
 }
