@@ -1,3 +1,5 @@
+import { supabase } from "@/lib/supabase";
+
 interface PollOption {
   id: string;
   text: string;
@@ -19,7 +21,6 @@ interface Vote {
   poll_id: string;
   user_id: string;
   option_id: string;
-  weight: number;
   timestamp: string;
 }
 
@@ -30,7 +31,6 @@ interface PollResults {
     option_id: string;
     text: string;
     vote_count: number;
-    weighted_count: number;
     percentage: number;
   }>;
 }
@@ -55,11 +55,6 @@ function readVotes(): Vote[] {
   return raw ? (JSON.parse(raw) as Vote[]) : [];
 }
 
-function writeVotes(votes: Vote[]) {
-  localStorage.setItem(VOTES_KEY, JSON.stringify(votes));
-  window.dispatchEvent(new Event('storage'));
-}
-
 function generateId(prefix: string): string {
   return `${prefix}_` + Math.random().toString(36).slice(2, 9);
 }
@@ -77,7 +72,7 @@ export async function getActivePoll(eventId: string): Promise<Poll | null> {
   );
 }
 
-// GET /polls?event_id=xxx (admin list — not in spec but needed for CMS)
+// GET /polls?event_id=xxx
 export async function getPollsForEvent(eventId: string): Promise<Poll[]> {
   return readPolls().filter((p) => p.event_id === eventId);
 }
@@ -86,7 +81,7 @@ export async function getPollsForEvent(eventId: string): Promise<Poll[]> {
 export async function createPoll(input: {
   event_id: string;
   question: string;
-  options: string[]; // plain text options; ids generated here
+  options: string[];
   type: Poll['type'];
   start_time: string;
   end_time: string;
@@ -110,33 +105,16 @@ export async function createPoll(input: {
   return poll;
 }
 
-// POST /votes
-// weight is applied server-side per the spec's weighted voting logic:
-//   premium tier -> weight 2, everyone else -> weight 1
-export async function submitVote(
-  pollId: string,
-  optionId: string,
-  userId: string,
-  userTier: 'free' | 'standard' | 'premium'
-): Promise<Vote> {
-  const existing = readVotes();
-  const alreadyVoted = existing.some(
-    (v) => v.poll_id === pollId && v.user_id === userId
-  );
-  if (alreadyVoted) {
-    throw new Error('User has already voted in this poll');
-  }
+// POST /votes - Pure Supabase insertion without tiers or weights
+export async function submitVote(pollId: string, optionId: string, userId: string) {
+  const { data, error } = await supabase
+    .from('votes')
+    .insert([
+      { poll_id: pollId, option_id: optionId, user_id: userId }
+    ]);
 
-  const vote: Vote = {
-    id: generateId('vote'),
-    poll_id: pollId,
-    user_id: userId,
-    option_id: optionId,
-    weight: userTier === 'premium' ? 2 : 1,
-    timestamp: new Date().toISOString(),
-  };
-  writeVotes([...existing, vote]);
-  return vote;
+  if (error) throw error;
+  return data;
 }
 
 // GET /polls/{id}/results
@@ -145,17 +123,16 @@ export async function getPollResults(pollId: string): Promise<PollResults | null
   if (!poll) return null;
 
   const votes = readVotes().filter((v) => v.poll_id === pollId);
-  const totalWeighted = votes.reduce((sum, v) => sum + v.weight, 0) || 1;
+  const totalVotes = votes.length || 1;
 
   const options = poll.options.map((opt) => {
     const optionVotes = votes.filter((v) => v.option_id === opt.id);
-    const weightedCount = optionVotes.reduce((sum, v) => sum + v.weight, 0);
+    const count = optionVotes.length;
     return {
       option_id: opt.id,
       text: opt.text,
-      vote_count: optionVotes.length,
-      weighted_count: weightedCount,
-      percentage: Math.round((weightedCount / totalWeighted) * 100),
+      vote_count: count,
+      percentage: Math.round((count / totalVotes) * 100),
     };
   });
 

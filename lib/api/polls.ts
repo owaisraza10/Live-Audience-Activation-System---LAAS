@@ -49,7 +49,6 @@ export async function createPoll(input: {
   show_results: boolean;
 }): Promise<Poll> {
   
-  // Step A: Insert the Poll
   const { data: poll, error: pollError } = await supabase
     .from('polls')
     .insert([{
@@ -67,7 +66,6 @@ export async function createPoll(input: {
     throw new Error(`Error creating poll: ${pollError?.message}`);
   }
 
-  // Step B: Insert the Options linked to that Poll
   const optionInserts = input.options.map(text => ({
     poll_id: poll.id,
     text: text
@@ -86,15 +84,20 @@ export async function createPoll(input: {
 }
 
 // ==========================================
-// 4. SUBMIT VOTE
+// 4. SUBMIT VOTE (Auto-syncs user to prevent FK errors)
 // ==========================================
 export async function submitVote(
   pollId: string,
   optionId: string,
-  userId: string,
-  userTier: 'free' | 'standard' | 'premium'
+  userId: string
 ): Promise<Vote> {
-  const weight = userTier === 'premium' ? 2 : 1;
+  // 🔥 Auto-ensure user exists in Supabase to prevent foreign key constraint crashes
+  await supabase
+    .from('users')
+    .upsert(
+      { id: userId, email: `${userId.slice(0, 8)}@laas.local`, name: 'Viewer' },
+      { onConflict: 'id', ignoreDuplicates: true }
+    );
 
   const { data, error } = await supabase
     .from('votes')
@@ -102,7 +105,7 @@ export async function submitVote(
       poll_id: pollId,
       option_id: optionId,
       user_id: userId,
-      weight: weight
+      weight: 1
     }])
     .select()
     .single();
@@ -118,10 +121,9 @@ export async function submitVote(
 }
 
 // ==========================================
-// 5. GET POLL RESULTS (MATH & AGGREGATION)
+// 5. GET POLL RESULTS
 // ==========================================
 export async function getPollResults(pollId: string): Promise<PollResults | null> {
-  // Fetch Poll with options
   const { data: poll, error: pollError } = await supabase
     .from('polls')
     .select('*, options:poll_options(*)')
@@ -130,18 +132,14 @@ export async function getPollResults(pollId: string): Promise<PollResults | null
 
   if (pollError || !poll) return null;
 
-  // Fetch all votes for this poll
   const { data: votes, error: votesError } = await supabase
     .from('votes')
     .select('*')
     .eq('poll_id', pollId);
 
   const safeVotes = votes || [];
-  
-  // Calculate total weighted votes (avoid division by zero)
   const totalWeighted = safeVotes.reduce((sum, v) => sum + (v.weight || 1), 0) || 1;
 
-  // Map the results exactly to your UI's expected format
   const mappedOptions = (poll.options || []).map((opt: PollOption) => {
     const optionVotes = safeVotes.filter(v => v.option_id === opt.id);
     const weightedCount = optionVotes.reduce((sum, v) => sum + (v.weight || 1), 0);
@@ -181,8 +179,6 @@ export async function updatePoll(
 // 7. DELETE POLL
 // ==========================================
 export async function deletePoll(id: string): Promise<void> {
-  // Because we set up ON DELETE CASCADE in the database, 
-  // deleting the poll automatically deletes its options and votes!
   const { error } = await supabase
     .from('polls')
     .delete()
